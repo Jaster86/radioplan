@@ -1,76 +1,193 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Session, User } from '@supabase/supabase-js';
+import { supabase } from '../services/supabaseClient';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Doctor, RoleDefinition } from '../types';
-import { authService } from '../services/api/authService';
+type UserRole = 'admin' | 'doctor' | 'viewer';
 
-interface AuthContextType {
-    user: Doctor | null;
-    isLoading: boolean;
-    login: (email: string, password?: string) => Promise<void>;
-    logout: () => void;
-    hasPermission: (permission: string, loadedRoles?: RoleDefinition[]) => boolean;
+interface UserProfile {
+    id: string;
+    email: string;
+    role: UserRole;
+    doctor_id?: string;
+    role_id?: string;
+    role_name?: string;
+    permissions: string[];
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+interface AuthContextType {
+    session: Session | null;
+    user: User | null;
+    profile: UserProfile | null;
+    loading: boolean;
+    isAdmin: boolean;
+    isDoctor: boolean;
+    signInWithPassword: (email: string, password: string) => Promise<{ error: any }>;
+    signOut: () => Promise<void>;
+    hasPermission: (permission: string) => boolean;
+    refreshProfile: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<Doctor | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [session, setSession] = useState<Session | null>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const initAuth = async () => {
-            try {
-                const currentUser = await authService.me();
-                setUser(currentUser);
-            } catch (e) {
-                console.error("Auth init failed", e);
-            } finally {
-                setIsLoading(false);
+        // Get initial session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            if (session?.user) {
+                fetchProfile(session.user.id);
+            } else {
+                setLoading(false);
             }
-        };
-        initAuth();
+        });
+
+        // Listen for changes - but avoid unnecessary updates on TOKEN_REFRESHED
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((event, newSession) => {
+            // Only update state if session actually changed (not just refreshed)
+            // TOKEN_REFRESHED events shouldn't trigger full re-renders
+            if (event === 'TOKEN_REFRESHED') {
+                // Just update the session object without triggering profile refetch
+                setSession(newSession);
+                setUser(newSession?.user ?? null);
+                return;
+            }
+
+            setSession(newSession);
+            setUser(newSession?.user ?? null);
+            if (newSession?.user) {
+                fetchProfile(newSession.user.id);
+            } else {
+                setProfile(null);
+                setLoading(false);
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
-    const login = async (email: string, password?: string) => {
-        setIsLoading(true);
+    const fetchProfile = async (userId: string) => {
         try {
-            const loggedUser = await authService.login(email, password);
-            setUser(loggedUser);
-            localStorage.setItem('radioplan_auth_token', JSON.stringify(loggedUser));
-        } finally {
-            setIsLoading(false);
-        }
-    };
+            // Step 1: Get basic profile
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, email, role, doctor_id, role_id')
+                .eq('id', userId)
+                .single();
 
-    const logout = async () => {
-        await authService.logout();
-        setUser(null);
-    };
-
-    // Updated to accept roles dynamically
-    const hasPermission = (permission: string, loadedRoles?: RoleDefinition[]) => {
-        if (!user) return false;
-        
-        // If roles are provided (from App context), use them to check permissions
-        if (loadedRoles) {
-            const roleDef = loadedRoles.find(r => r.id === user.role);
-            if (roleDef) {
-                // Safely access permissions, default to empty array if null/undefined in DB
-                return (roleDef.permissions || []).includes(permission);
+            if (profileError) {
+                console.error('Error fetching profile:', profileError);
+                setProfile(null);
+                setLoading(false);
+                return;
             }
+
+            // Step 2: Get role name if role_id exists
+            let roleName = '';
+            let permissions: string[] = [];
+
+            if (profileData.role_id) {
+                const { data: roleData } = await supabase
+                    .from('app_roles')
+                    .select('name')
+                    .eq('id', profileData.role_id)
+                    .single();
+
+                if (roleData) {
+                    roleName = roleData.name;
+                }
+
+                // Step 3: Get permissions for this role
+                const { data: permData } = await supabase
+                    .from('role_permissions')
+                    .select('app_permissions(code)')
+                    .eq('role_id', profileData.role_id);
+
+                if (permData) {
+                    permissions = permData
+                        .map((p: any) => p.app_permissions?.code)
+                        .filter(Boolean);
+                }
+            }
+
+            // If role is 'admin' (legacy enum), give all permissions
+            if (profileData.role === 'admin' || roleName === 'Admin') {
+                permissions = ['ALL']; // Special marker for admin
+            }
+
+            setProfile({
+                ...profileData,
+                role_name: roleName,
+                permissions
+            });
+
+        } catch (err) {
+            console.error('Unexpected error fetching profile:', err);
+            setProfile(null);
+        } finally {
+            setLoading(false);
         }
-        
-        // Fallback for bootstrap / initial load if needed (Admin always has access if role is ADMIN)
-        if (user.role === 'ADMIN') return true;
-        
-        return false;
     };
 
-    return (
-        <AuthContext.Provider value={{ user, isLoading, login, logout, hasPermission }}>
-            {children}
-        </AuthContext.Provider>
-    );
+    const signInWithPassword = async (email: string, password: string) => {
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+        return { error };
+    };
+
+    const signOut = async () => {
+        await supabase.auth.signOut();
+        setProfile(null);
+    };
+
+    const refreshProfile = async () => {
+        if (user) {
+            await fetchProfile(user.id);
+        }
+    };
+
+    const hasPermission = (permission: string): boolean => {
+        if (!profile) return false;
+
+        // Admin has all permissions
+        if (profile.role === 'admin' ||
+            profile.role_name === 'Admin' ||
+            profile.permissions.includes('ALL')) {
+            return true;
+        }
+
+        return profile.permissions.includes(permission);
+    };
+
+    const value = {
+        session,
+        user,
+        profile,
+        loading,
+        isAdmin: profile?.role === 'admin' || profile?.role_name === 'Admin',
+        isDoctor: profile?.role === 'doctor' || profile?.role_name === 'Docteur',
+        signInWithPassword,
+        signOut,
+        hasPermission,
+        refreshProfile
+    };
+
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};

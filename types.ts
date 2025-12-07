@@ -2,9 +2,23 @@
 export enum SlotType {
   CONSULTATION = 'Consultation',
   RCP = 'RCP',
-  MACHINE = 'Machine', 
-  ACTIVITY = 'Activity', 
+  MACHINE = 'Machine', // Legacy, can be mapped to activity
+  ACTIVITY = 'Activity', // Generic Activity (Astreinte, Unity, Workflow)
   OTHER = 'Other'
+}
+
+export interface AppPermission {
+  id: string;
+  code: string;
+  description: string;
+}
+
+export interface AppRole {
+  id: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  permissions?: AppPermission[];
 }
 
 export enum Period {
@@ -20,83 +34,63 @@ export enum DayOfWeek {
   FRIDAY = 'Vendredi'
 }
 
-// --- SECURITY & BACKEND MODELS ---
-
-export type UserRole = 'ADMIN' | 'DOCTOR' | 'VIEWER' | string; // Flexible roles
-
-export interface PermissionItem {
-    key: string;
-    label: string;
-    description: string;
-}
-
-export interface RoleDefinition {
-    id: string;
-    name: string;
-    isSystem?: boolean; // Cannot be deleted
-    permissions: string[]; // List of permission keys
-}
-
-export interface UserProfile {
+export interface Doctor {
   id: string;
-  email: string;
   name: string;
-  role: UserRole;
-  password?: string; // New Password Field
-  avatar?: string;
-  lastLogin?: string;
-}
-
-export interface Doctor extends UserProfile {
   specialty: string[];
   color: string;
-  // Business Logic Data
-  tempsDeTravail: number; // 1.0, 0.8, 0.6
-  excludedDays: DayOfWeek[]; 
-  excludedActivities: string[]; 
-  excludedSlotTypes?: SlotType[];
-  // Future DB Relations (IDs only in frontend usually, but keeping full obj for now)
-  hospitalId?: string;
+  // Exclusions
+  excludedDays: DayOfWeek[]; // Days they don't work (e.g. 80%)
+  excludedActivities: string[]; // Activity IDs they don't do
+  excludedSlotTypes?: SlotType[]; // NEW: Specific exclusions (Consult, RCP...) - affect suggestions only, not existing rules
 }
 
-// --- BUSINESS MODELS ---
+export interface Specialty {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+}
 
 export interface Unavailability {
   id: string;
   doctorId: string;
   startDate: string; // ISO string YYYY-MM-DD
   endDate: string;   // ISO string YYYY-MM-DD
-  period?: 'ALL_DAY' | Period; 
+  period?: 'ALL_DAY' | Period; // NEW: Granularity of absence
   reason: string;
 }
 
 export interface ActivityDefinition {
   id: string;
   name: string;
-  granularity: 'HALF_DAY' | 'WEEKLY'; 
-  allowDoubleBooking: boolean; 
+  granularity: 'HALF_DAY' | 'WEEKLY'; // Week = 1 doctor for whole week
+  allowDoubleBooking: boolean; // If true, doesn't trigger conflict (e.g. Supervision)
   color: string;
-  isSystem?: boolean; 
+  isSystem?: boolean; // If true, cannot be deleted (e.g. Astreinte basic)
+  equityGroup?: string; // Group for combined equity calculation (e.g., 'unity_astreinte', 'workflow')
 }
 
+// NEW: Rich structure for manual RCP instances
 export interface RcpManualInstance {
-    id: string;
-    date: string; // ISO YYYY-MM-DD
-    time: string; // HH:MM
-    doctorIds: string[]; 
-    backupDoctorId?: string | null; 
+  id: string;
+  date: string; // ISO YYYY-MM-DD
+  time: string; // HH:MM
+  doctorIds: string[]; // Participants [Lead, Assoc1, Assoc2]
+  backupDoctorId?: string | null; // NEW: Explicit Backup for manual instance
 }
 
 export interface RcpDefinition {
-    id: string;
-    name: string;
-    frequency: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'MANUAL'; 
-    weekParity?: 'ODD' | 'EVEN'; 
-    monthlyWeekNumber?: number; 
-    manualInstances?: RcpManualInstance[]; 
-    manualDates?: string[]; 
+  id: string;
+  name: string;
+  frequency: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'MANUAL'; // Updated
+  weekParity?: 'ODD' | 'EVEN'; // If Bi-weekly, which weeks?
+  monthlyWeekNumber?: number; // NEW: 1, 2, 3, 4 (for MONTHLY)
+  manualInstances?: RcpManualInstance[]; // NEW: Replaces simple manualDates
+  manualDates?: string[]; // DEPRECATED: Kept for backward compat type safety, unused
 }
 
+// The "Rule" or "Base Responsibility" for fixed slots (Consult/RCP)
 export interface ScheduleTemplateSlot {
   id: string;
   day: DayOfWeek;
@@ -105,33 +99,36 @@ export interface ScheduleTemplateSlot {
   location: string;
   type: SlotType;
   defaultDoctorId: string | null;
-  secondaryDoctorIds?: string[]; 
-  doctorIds?: string[]; 
-  backupDoctorId?: string | null; 
+  secondaryDoctorIds?: string[]; // Used for 2nd and 3rd doctor
+  doctorIds?: string[]; // NEW: Explicit list of assigned doctors [doc1, doc2, doc3]
+  backupDoctorId?: string | null; // NEW: Backup doctor who receives notifications
   subType?: string;
   isRequired?: boolean;
-  isBlocking?: boolean; 
+  isBlocking?: boolean; // NEW: If false, does not trigger double booking conflict
   frequency?: 'WEEKLY' | 'BIWEEKLY';
 }
 
+// The Actual Generated Slot for a specific date
 export interface ScheduleSlot {
   id: string;
   date: string;
   day: DayOfWeek;
-  period: Period; 
-  time?: string; 
-  location: string; 
+  period: Period;
+  time?: string;
+  location: string;
   type: SlotType;
-  assignedDoctorId: string | null; 
-  secondaryDoctorIds?: string[]; 
-  backupDoctorId?: string | null; 
-  subType?: string; 
+  assignedDoctorId: string | null;
+  secondaryDoctorIds?: string[];
+  backupDoctorId?: string | null; // Carried over from template
+  subType?: string;
   isGenerated?: boolean;
-  activityId?: string; 
-  isLocked?: boolean; 
-  isBlocking?: boolean; 
-  isClosed?: boolean; 
-  isUnconfirmed?: boolean; 
+  activityId?: string; // Link to ActivityDefinition
+  isLocked?: boolean; // If manually overridden
+  isBlocking?: boolean; // Inherited from template
+  isClosed?: boolean; // NEW: Explicitly closed by user
+  isUnconfirmed?: boolean; // NEW: If generated by default but not confirmed by anyone
+  isCancelled?: boolean; // NEW: If RCP session was cancelled
+  isAutoAssigned?: boolean; // NEW: If assigned by auto-fill algorithm
 }
 
 export interface Conflict {
@@ -151,114 +148,108 @@ export interface ReplacementSuggestion {
 }
 
 export interface Holiday {
-    date: string; // YYYY-MM-DD
-    name: string;
+  date: string; // MM-DD or YYYY-MM-DD
+  name: string;
 }
 
+// History of shifts count: { doctorId: { activityId: count } }
 export type ShiftHistory = Record<string, Record<string, number>>;
+
+// Persistent Manual Overrides: { slotId: doctorId }
 export type ManualOverrides = Record<string, string>;
+
+// RCP Attendance: { slotId: { doctorId: 'PRESENT' | 'ABSENT' } }
 export type RcpStatus = 'PRESENT' | 'ABSENT';
 export type RcpAttendance = Record<string, Record<string, RcpStatus>>;
 
+// NEW: RCP Exceptions (Move or Cancel specific instances)
 export interface RcpException {
-    rcpTemplateId: string;
-    originalDate: string; 
-    newDate?: string; 
-    newPeriod?: Period; 
-    isCancelled?: boolean;
-    newTime?: string; 
-    customDoctorIds?: string[]; 
+  rcpTemplateId: string;
+  originalDate: string; // The date it WOULD have been
+  newDate?: string; // If moved
+  newPeriod?: Period; // If moved
+  isCancelled?: boolean;
+  newTime?: string; // NEW: Override the time for this specific instance
+  customDoctorIds?: string[]; // NEW: Override the participant list for this instance
 }
 
-// Global Config Object (for Admin Panel)
-export interface GlobalConfiguration {
-    showWeekends: boolean;
-    autoDistribute: boolean;
-    weights: {
-        unity: number;
-        astreinte: number;
-    }
-}
-
+// NEW: Global Backup Interface
 export interface GlobalBackupData {
-    metadata: {
-        version: string;
-        appName: string;
-        exportDate: string;
-    };
-    data: {
-        doctors: Doctor[];
-        template: ScheduleTemplateSlot[];
-        rcpTypes: RcpDefinition[];
-        postes: string[];
-        activityDefinitions: ActivityDefinition[];
-        unavailabilities: Unavailability[];
-        shiftHistory: ShiftHistory;
-        manualOverrides: ManualOverrides;
-        rcpAttendance: RcpAttendance;
-        rcpExceptions: RcpException[];
-        activitiesStartDate?: string | null; 
-        roles?: RoleDefinition[];
-    }
+  metadata: {
+    version: string;
+    appName: string;
+    exportDate: string;
+  };
+  data: {
+    doctors: Doctor[];
+    template: ScheduleTemplateSlot[];
+    rcpTypes: RcpDefinition[];
+    postes: string[];
+    activityDefinitions: ActivityDefinition[];
+    unavailabilities: Unavailability[];
+    shiftHistory: ShiftHistory;
+    manualOverrides: ManualOverrides;
+    rcpAttendance: RcpAttendance;
+    rcpExceptions: RcpException[];
+    activitiesStartDate?: string | null;
+    specialties?: Specialty[];
+  }
 }
 
-// --- CONTEXT TYPE ---
 export interface AppContextType {
-  // Auth
-  user: Doctor | null;
-  isLoading: boolean;
-  login: (email: string, password?: string) => Promise<void>;
-  logout: () => void;
-  hasPermission: (permission: string) => boolean;
-  isCloudMode: boolean; // Indicates if connected to Supabase
-
-  // Roles & Permissions (New)
-  roles: RoleDefinition[];
-  updateRole: (role: RoleDefinition) => void;
-  addRole: (name: string) => Promise<void>;
-  removeRole: (id: string) => Promise<void>;
-
-  // Data
   doctors: Doctor[];
-  addDoctor: (d: Doctor) => Promise<void>;
-  updateDoctor: (d: Doctor) => Promise<void>;
-  removeDoctor: (id: string) => Promise<void>; 
-  
-  currentUser: Doctor | null; // This is the "Selected Profile" in UI, distinct from Logged User
-  setCurrentUser: (d: Doctor | null) => void;
-
-  schedule: ScheduleSlot[]; 
+  addDoctor: (d: Doctor) => void;
+  updateDoctor: (d: Doctor) => void;
+  removeDoctor: (id: string) => void; // NEW
+  currentUser: Doctor | null;
+  schedule: ScheduleSlot[]; // Base schedule (usually calculated from a default date, but pages use local)
   template: ScheduleTemplateSlot[];
   unavailabilities: Unavailability[];
   conflicts: Conflict[];
   rcpTypes: RcpDefinition[];
-  postes: string[]; 
+  postes: string[]; // List of consultation locations (Box 1, Box 2, Scanner...)
   addPoste: (name: string) => void;
-  removePoste: (name: string) => void; 
+  removePoste: (name: string) => void;
   activityDefinitions: ActivityDefinition[];
   addActivityDefinition: (a: ActivityDefinition) => void;
+  updateActivityDefinition: (a: ActivityDefinition) => void; // NEW
+  removeActivityDefinition: (id: string) => void; // NEW
   updateSchedule: (newSchedule: ScheduleSlot[]) => void;
   updateTemplate: (newTemplate: ScheduleTemplateSlot[]) => void;
   addUnavailability: (u: Unavailability) => void;
   removeUnavailability: (id: string) => void;
-  
+  setCurrentUser: (d: Doctor | null) => void;
   addRcpType: (name: string) => void;
   updateRcpDefinition: (def: RcpDefinition) => void;
   removeRcpType: (id: string) => void;
   renameRcpType: (oldName: string, newName: string) => void;
-  
-  shiftHistory: ShiftHistory; 
+  shiftHistory: ShiftHistory; // Past history for equity
   manualOverrides: ManualOverrides;
   setManualOverrides: (overrides: ManualOverrides) => void;
-  
   importConfiguration: (data: any) => void;
-  
-  rcpAttendance: RcpAttendance; 
-  setRcpAttendance: (att: RcpAttendance) => void; 
-  rcpExceptions: RcpException[]; 
-  addRcpException: (ex: RcpException) => void; 
-  removeRcpException: (templateId: string, originalDate: string) => void; 
-  
-  activitiesStartDate: string | null; 
-  setActivitiesStartDate: (date: string | null) => void; 
+  rcpAttendance: RcpAttendance; // NEW
+  setRcpAttendance: (att: RcpAttendance) => void; // NEW
+  rcpExceptions: RcpException[]; // NEW
+  addRcpException: (ex: RcpException) => void; // NEW
+  removeRcpException: (templateId: string, originalDate: string) => void; // NEW helper
+  activitiesStartDate: string | null; // NEW: Date from which to start counting equity
+  setActivitiesStartDate: (date: string | null) => void; // NEW
+  validatedWeeks: string[]; // NEW: List of validated week keys
+  validateWeek: (weekKey: string) => void; // NEW
+  unvalidateWeek: (weekKey: string) => void; // NEW
+  activitiesWeekOffset: number; // NEW: Week offset for Activities page (survives re-renders)
+  setActivitiesWeekOffset: (offset: number) => void; // NEW
+  activitiesActiveTab: string; // NEW: Active tab in Activities page (survives re-renders)
+  setActivitiesActiveTab: (tabId: string) => void; // NEW
+  profileRcpWeekOffset: number; // NEW: Week offset for RCP section in Profile page (survives re-renders)
+  setProfileRcpWeekOffset: (offset: number) => void; // NEW
+  dashboardViewMode: 'DAY' | 'WEEK'; // Dashboard view mode (survives re-renders)
+  setDashboardViewMode: (mode: 'DAY' | 'WEEK') => void;
+  dashboardWeekOffset: number; // Dashboard week offset (survives re-renders)
+  setDashboardWeekOffset: (offset: number) => void;
+  configActiveTab: string; // Configuration active tab (survives re-renders)
+  setConfigActiveTab: (tab: string) => void;
+  configRcpWeekOffset: number; // Configuration RCP calendar week offset (survives re-renders)
+  setConfigRcpWeekOffset: (offset: number) => void;
 }
+
