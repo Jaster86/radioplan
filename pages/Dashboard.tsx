@@ -77,7 +77,10 @@ const Dashboard: React.FC = () => {
                 if (overrideValue === '__CLOSED__') {
                     return { ...slot, assignedDoctorId: null, isLocked: true, isClosed: true };
                 } else {
-                    return { ...slot, assignedDoctorId: overrideValue, isLocked: true };
+                    // Handle 'auto:' prefix - extract actual doctor ID
+                    const isAuto = overrideValue.startsWith('auto:');
+                    const doctorId = isAuto ? overrideValue.substring(5) : overrideValue;
+                    return { ...slot, assignedDoctorId: doctorId, isLocked: true, isAutoAssigned: isAuto };
                 }
             }
             return slot;
