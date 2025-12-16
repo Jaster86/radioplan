@@ -18,7 +18,7 @@ const Planning: React.FC = () => {
         setManualOverrides,
         template,
         rcpTypes,
-        shiftHistory,
+        effectiveHistory, // Use effectiveHistory instead of shiftHistory for equity calculations
         rcpAttendance,
         rcpExceptions
     } = useContext(AppContext);
@@ -49,7 +49,7 @@ const Planning: React.FC = () => {
             activityDefinitions,
             rcpTypes,
             true,
-            shiftHistory,
+            effectiveHistory,
             rcpAttendance,
             rcpExceptions
         );
@@ -68,7 +68,7 @@ const Planning: React.FC = () => {
             }
             return slot;
         });
-    }, [currentWeekStart, template, unavailabilities, doctors, activityDefinitions, rcpTypes, shiftHistory, rcpAttendance, rcpExceptions, manualOverrides]);
+    }, [currentWeekStart, template, unavailabilities, doctors, activityDefinitions, rcpTypes, effectiveHistory, rcpAttendance, rcpExceptions, manualOverrides]);
 
     const conflicts = useMemo(() => {
         return detectConflicts(schedule, unavailabilities, doctors, activityDefinitions);

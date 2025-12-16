@@ -223,7 +223,8 @@ export interface AppContextType {
   updateRcpDefinition: (def: RcpDefinition) => void;
   removeRcpType: (id: string) => void;
   renameRcpType: (oldName: string, newName: string) => void;
-  shiftHistory: ShiftHistory; // Past history for equity
+  shiftHistory: ShiftHistory; // Past history for equity (raw, includes all history)
+  effectiveHistory: ShiftHistory; // NEW: Equity history calculated from activitiesStartDate (use this for equity calculations)
   manualOverrides: ManualOverrides;
   setManualOverrides: (overrides: ManualOverrides) => void;
   importConfiguration: (data: any) => void;
@@ -251,5 +252,7 @@ export interface AppContextType {
   setConfigActiveTab: (tab: string) => void;
   configRcpWeekOffset: number; // Configuration RCP calendar week offset (survives re-renders)
   setConfigRcpWeekOffset: (offset: number) => void;
+  configRcpViewMode: 'RULES' | 'CALENDAR'; // NEW: RCP view mode (survives re-renders)
+  setConfigRcpViewMode: (mode: 'RULES' | 'CALENDAR') => void; // NEW
 }
 

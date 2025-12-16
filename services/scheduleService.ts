@@ -525,10 +525,17 @@ export const computeHistoryFromDate = (
         });
     }
 
-    const start = new Date(startDateStr);
+    const startRaw = new Date(startDateStr);
 
     // Safety check
-    if (isNaN(start.getTime())) return computedHistory;
+    if (isNaN(startRaw.getTime())) return computedHistory;
+
+    // Get the MONDAY of the week containing the start date
+    // This ensures we start counting from the beginning of the start week
+    const startDay = startRaw.getDay();
+    const start = new Date(startRaw);
+    start.setDate(startRaw.getDate() - startDay + (startDay === 0 ? -6 : 1));
+    start.setHours(0, 0, 0, 0);
 
     // Track workflow weeks already counted per doctor per activity
     // Key: "doctorId-activityId-weekStart"
@@ -1002,7 +1009,9 @@ export const detectConflicts = (
                         if (isS1Rcp || isS2Rcp) {
                             const rcp = isS1Rcp ? s1 : s2;
                             const other = isS1Rcp ? s2 : s1;
-                            const msg = `Présence confirmée à la ${rcp.subType || rcp.location}. Impossible d'assurer ${other.subType || other.location}.`;
+                            const rcpName = rcp.subType || rcp.location;
+                            const otherName = other.subType || other.location;
+                            const msg = `⚠️ CONFLIT : ${doc.name} a confirmé sa présence à la RCP "${rcpName}". Impossible de l'affecter à "${otherName}" sur la même demi-journée.`;
                             desc1 = msg;
                             desc2 = msg;
                         } else if (s1.type === SlotType.ACTIVITY && s2.type === SlotType.ACTIVITY) {

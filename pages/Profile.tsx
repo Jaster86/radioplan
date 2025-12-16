@@ -4,11 +4,11 @@ import { AppContext } from '../App';
 import { useAuth } from '../context/AuthContext';
 import {
     Calendar, Save, Trash2, UserCheck,
-    Ban, Briefcase, Edit, Bell, ChevronLeft, ChevronRight,
+    Briefcase, Edit, Bell, ChevronLeft, ChevronRight,
     CheckCircle2, XCircle, AlertTriangle, Clock, RotateCcw,
     Plus, Loader2, Tag
 } from 'lucide-react';
-import { DayOfWeek, SlotType, Doctor, Period, Specialty } from '../types';
+import { SlotType, Doctor, Period, Specialty } from '../types';
 import { getDateForDayOfWeek, isFrenchHoliday } from '../services/scheduleService';
 import { supabase } from '../services/supabaseClient';
 
@@ -19,7 +19,6 @@ const Profile: React.FC = () => {
         removeUnavailability,
         doctors,
         updateDoctor,
-        activityDefinitions,
         template,
         rcpTypes,
         rcpAttendance,
@@ -156,7 +155,7 @@ const Profile: React.FC = () => {
             const displayTime = exception?.newTime || t.time || 'N/A';
             const holiday = isFrenchHoliday(displayDate);
 
-            const generatedId = `${t.id} -${slotDate} `;
+            const generatedId = `${t.id}-${slotDate}`;
             const currentMap = rcpAttendance[generatedId] || {};
             const myStatus = currentMap[currentDoctor.id];
 
@@ -208,7 +207,7 @@ const Profile: React.FC = () => {
                 return inst.doctorIds.includes(currentDoctor.id) || inst.backupDoctorId === currentDoctor.id;
             })
             .map(inst => {
-                const generatedId = `manual - rcp - ${inst.rcpId} -${inst.id} `;
+                const generatedId = `manual-rcp-${inst.rcpId}-${inst.id}`;
                 const holiday = isFrenchHoliday(inst.date);
                 const currentMap = rcpAttendance[generatedId] || {};
                 const myStatus = currentMap[currentDoctor.id];
@@ -336,39 +335,6 @@ const Profile: React.FC = () => {
         setCustomReason("");
     };
 
-    const toggleDayExclusion = (day: DayOfWeek) => {
-        if (!currentDoctor) return;
-        const currentExclusions = currentDoctor.excludedDays || [];
-        let newExclusions = currentExclusions.includes(day)
-            ? currentExclusions.filter(d => d !== day)
-            : [...currentExclusions, day];
-        const updatedDoc = { ...currentDoctor, excludedDays: newExclusions };
-        updateDoctor(updatedDoc);
-        setCurrentDoctor(updatedDoc);
-    };
-
-    const toggleActivityExclusion = (actId: string) => {
-        if (!currentDoctor) return;
-        const currentExclusions = currentDoctor.excludedActivities || [];
-        let newExclusions = currentExclusions.includes(actId)
-            ? currentExclusions.filter(a => a !== actId)
-            : [...currentExclusions, actId];
-        const updatedDoc = { ...currentDoctor, excludedActivities: newExclusions };
-        updateDoctor(updatedDoc);
-        setCurrentDoctor(updatedDoc);
-    };
-
-    const toggleSlotTypeExclusion = (type: SlotType) => {
-        if (!currentDoctor) return;
-        const currentExclusions = currentDoctor.excludedSlotTypes || [];
-        let newExclusions = currentExclusions.includes(type)
-            ? currentExclusions.filter(t => t !== type)
-            : [...currentExclusions, type];
-        const updatedDoc = { ...currentDoctor, excludedSlotTypes: newExclusions };
-        updateDoctor(updatedDoc);
-        setCurrentDoctor(updatedDoc);
-    };
-
     const getNotificationWeekLabel = () => {
         const today = new Date();
         const currentMonday = new Date(today);
@@ -417,7 +383,7 @@ const Profile: React.FC = () => {
                 const exception = rcpExceptions.find(ex => ex.rcpTemplateId === t.id && ex.originalDate === slotDate);
                 if (exception?.isCancelled) continue;
 
-                const generatedId = `${t.id} -${slotDate} `;
+                const generatedId = `${t.id}-${slotDate}`;
                 const currentMap = rcpAttendance[generatedId] || {};
                 const myStatus = currentMap[currentDoctor.id];
 
@@ -442,7 +408,7 @@ const Profile: React.FC = () => {
                 });
 
             for (const inst of manualRcps) {
-                const generatedId = `manual - rcp - ${inst.rcpId} -${inst.id} `;
+                const generatedId = `manual-rcp-${inst.rcpId}-${inst.id}`;
                 const currentMap = rcpAttendance[generatedId] || {};
                 const myStatus = currentMap[currentDoctor.id];
 
@@ -842,80 +808,19 @@ const Profile: React.FC = () => {
                     </ul>
                 </div>
 
-                {/* PREFERENCES */}
+                {/* Info about Preferences - Now managed by Admin */}
                 <div>
                     <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
                         <Briefcase className="w-5 h-5 mr-2 text-purple-500" />
-                        Mes Préférences & Exclusions
+                        Préférences & Exclusions
                     </h2>
-
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 mb-4 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center">
-                            <Ban className="w-4 h-4 mr-2 text-red-500" />
-                            Jours non travaillés (ex: 80%)
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {Object.values(DayOfWeek).map(day => (
-                                <button
-                                    key={day}
-                                    onClick={() => toggleDayExclusion(day)}
-                                    className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${currentDoctor.excludedDays?.includes(day)
-                                        ? 'bg-red-100 text-red-800 border-red-200 font-bold'
-                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    {day}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center">
-                            <Ban className="w-4 h-4 mr-2 text-slate-500" />
-                            Activités Exclues
-                        </h3>
-                        <div className="space-y-2">
-                            {activityDefinitions.map(act => (
-                                <div key={act.id} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer" onClick={() => toggleActivityExclusion(act.id)}>
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 ${currentDoctor.excludedActivities?.includes(act.id) ? 'bg-red-500 border-red-500' : 'border-slate-300 bg-white'}`}>
-                                        {currentDoctor.excludedActivities?.includes(act.id) && <Ban className="w-3 h-3 text-white" />}
-                                    </div>
-                                    <span className={`text-sm ${currentDoctor.excludedActivities?.includes(act.id) ? 'text-red-700 font-medium line-through' : 'text-slate-700'}`}>
-                                        {act.name}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* EXCLUDED SLOT TYPES */}
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center">
-                            <Ban className="w-4 h-4 mr-2 text-orange-500" />
-                            Types de Créneau Exclus
-                        </h3>
-                        <p className="text-xs text-slate-500 mb-3">
-                            Ces exclusions empêchent l'algorithme de vous suggérer pour ces types de remplacements.
+                    <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                        <p className="text-sm text-slate-600">
+                            Vos préférences et exclusions (jours non travaillés, activités exclues) sont gérées par l'administrateur.
                         </p>
-                        <div className="flex flex-wrap gap-2">
-                            {Object.values(SlotType)
-                                .filter(type => type !== SlotType.MACHINE && type !== SlotType.OTHER)
-                                .map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => toggleSlotTypeExclusion(type)}
-                                        className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${currentDoctor.excludedSlotTypes?.includes(type)
-                                            ? 'bg-orange-100 text-orange-800 border-orange-200 font-bold'
-                                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                                            }`}
-                                    >
-                                        {type === SlotType.CONSULTATION ? 'Consultation' :
-                                            type === SlotType.RCP ? 'RCP' :
-                                                type === SlotType.ACTIVITY ? 'Activité' : type}
-                                    </button>
-                                ))}
-                        </div>
+                        <p className="text-sm text-slate-500 mt-2">
+                            Contactez votre responsable pour toute modification.
+                        </p>
                     </div>
                 </div>
             </div>

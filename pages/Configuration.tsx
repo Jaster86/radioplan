@@ -31,6 +31,8 @@ const Configuration: React.FC = () => {
         setConfigActiveTab,
         configRcpWeekOffset,
         setConfigRcpWeekOffset,
+        configRcpViewMode,    // NEW: Use context instead of local state
+        setConfigRcpViewMode, // NEW
         countingPeriods,
         createNewCountingPeriod
     } = useContext(AppContext);
@@ -43,7 +45,9 @@ const Configuration: React.FC = () => {
     const activeTab = (configActiveTab || 'CONSULTATION') as SlotType;
     const setActiveTab = (tab: SlotType) => setConfigActiveTab(tab);
 
-    const [rcpViewMode, setRcpViewMode] = useState<'RULES' | 'CALENDAR'>('RULES');
+    // Use context state for RCP view mode (survives re-renders)
+    const rcpViewMode = configRcpViewMode;
+    const setRcpViewMode = setConfigRcpViewMode;
 
     // Rule Editor State
     const [editMode, setEditMode] = useState(false);
@@ -664,7 +668,7 @@ const Configuration: React.FC = () => {
             <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4 items-center justify-between">
                 <div className="flex gap-2">
                     <button
-                        onClick={() => { setActiveTab(SlotType.CONSULTATION); setRcpViewMode('RULES'); }}
+                        onClick={() => setActiveTab(SlotType.CONSULTATION)}
                         className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${activeTab === SlotType.CONSULTATION ? 'bg-blue-100 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
                     >
                         Consultations & Postes

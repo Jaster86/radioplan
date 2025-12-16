@@ -48,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
           if (isInvolved) {
             const slotDate = getDateForDayOfWeek(targetMonday, t.day);
-            const generatedId = `${t.id} -${slotDate} `;
+            const generatedId = `${t.id}-${slotDate}`;
             const myDecision = rcpAttendance[generatedId]?.[doctorId];
             if (!myDecision) pendingCount++;
           }
@@ -61,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             if (inst.date >= startStr && inst.date <= endStr) {
               const isInvolved = inst.doctorIds.includes(doctorId) || inst.backupDoctorId === doctorId;
               if (isInvolved) {
-                const generatedId = `manual - rcp - ${rcp.id} -${inst.id} `;
+                const generatedId = `manual-rcp-${rcp.id}-${inst.id}`;
                 const myDecision = rcpAttendance[generatedId]?.[doctorId];
                 if (!myDecision) pendingCount++;
               }

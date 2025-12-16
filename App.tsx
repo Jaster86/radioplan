@@ -128,6 +128,16 @@ const App: React.FC = () => {
         setConfigRcpWeekOffsetState(offset);
     };
 
+    // NEW: Configuration RCP view mode - persisted in sessionStorage
+    const [configRcpViewMode, setConfigRcpViewModeState] = useState<'RULES' | 'CALENDAR'>(() => {
+        const saved = sessionStorage.getItem('config_rcpViewMode');
+        return (saved === 'CALENDAR' ? 'CALENDAR' : 'RULES');
+    });
+    const setConfigRcpViewMode = (mode: 'RULES' | 'CALENDAR') => {
+        sessionStorage.setItem('config_rcpViewMode', mode);
+        setConfigRcpViewModeState(mode);
+    };
+
     const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
 
     // Ref to track if initial data has already been loaded (prevents reload on tab focus)
@@ -196,21 +206,26 @@ const App: React.FC = () => {
     }, [profile, doctors]);
 
     // Compute Effective History
+    // If activitiesStartDate is set, count from that date only (new equity period)
+    // If not set, calculate from a default far past date (full history)
     const effectiveHistory = useMemo(() => {
-        if (activitiesStartDate) {
-            return computeHistoryFromDate(
-                activitiesStartDate,
-                currentReferenceDate,
-                template,
-                unavailabilities,
-                doctors,
-                activityDefinitions,
-                rcpTypes,
-                manualOverrides
-            );
-        }
-        return shiftHistory;
-    }, [activitiesStartDate, currentReferenceDate, template, unavailabilities, doctors, activityDefinitions, rcpTypes, manualOverrides, shiftHistory]);
+        const farFuture = new Date();
+        farFuture.setFullYear(farFuture.getFullYear() + 1);
+
+        // Use activitiesStartDate if set, otherwise use a date far in the past (2020-01-01)
+        const startDate = activitiesStartDate || '2020-01-01';
+
+        return computeHistoryFromDate(
+            startDate,
+            farFuture,
+            template,
+            unavailabilities,
+            doctors,
+            activityDefinitions,
+            rcpTypes,
+            manualOverrides
+        );
+    }, [activitiesStartDate, template, unavailabilities, doctors, activityDefinitions, rcpTypes, manualOverrides]);
 
     // Generate schedule automatically and MERGE with DB slots
     useEffect(() => {
@@ -601,7 +616,7 @@ const App: React.FC = () => {
             conflicts, rcpTypes, postes, addPoste, removePoste, activityDefinitions, addActivityDefinition,
             updateActivityDefinition, removeActivityDefinition,
             updateSchedule, updateTemplate, addUnavailability, removeUnavailability, setCurrentUser,
-            addRcpType, updateRcpDefinition, removeRcpType, renameRcpType, shiftHistory, manualOverrides,
+            addRcpType, updateRcpDefinition, removeRcpType, renameRcpType, shiftHistory, effectiveHistory, manualOverrides,
             setManualOverrides: setManualOverridesWrapper, importConfiguration, rcpAttendance, setRcpAttendance: setRcpAttendanceWrapper,
             rcpExceptions, addRcpException, removeRcpException, activitiesStartDate, setActivitiesStartDate: updateActivitiesStartDate,
             validatedWeeks, validateWeek, unvalidateWeek,
@@ -611,7 +626,8 @@ const App: React.FC = () => {
             dashboardViewMode, setDashboardViewMode,
             dashboardWeekOffset, setDashboardWeekOffset,
             configActiveTab, setConfigActiveTab,
-            configRcpWeekOffset, setConfigRcpWeekOffset
+            configRcpWeekOffset, setConfigRcpWeekOffset,
+            configRcpViewMode, setConfigRcpViewMode
         }}>
             <Router>
                 <Routes>

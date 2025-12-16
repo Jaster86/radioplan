@@ -17,7 +17,7 @@ interface Props {
 }
 
 const ConflictResolverModal: React.FC<Props> = ({ slot, conflict, doctors, slots, unavailabilities, onClose, onResolve, onCloseSlot }) => {
-    const { shiftHistory, activityDefinitions } = useContext(AppContext);
+    const { effectiveHistory, activityDefinitions } = useContext(AppContext);
     const [loading, setLoading] = useState(false);
     const [suggestions, setSuggestions] = useState<ReplacementSuggestion[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ const ConflictResolverModal: React.FC<Props> = ({ slot, conflict, doctors, slots
                 if (filteredDocs.length === 0) {
                     setError("Aucun autre médecin disponible sur ce créneau.");
                 } else {
-                    const smartSuggestions = getAlgorithmicReplacementSuggestion(targetSlotForReplacement, assignedDoctor, filteredDocs, slots, shiftHistory, activityDefinitions);
+                    const smartSuggestions = getAlgorithmicReplacementSuggestion(targetSlotForReplacement, assignedDoctor, filteredDocs, slots, effectiveHistory, activityDefinitions);
                     setSuggestions(smartSuggestions);
                 }
             } catch (err) {
@@ -79,7 +79,7 @@ const ConflictResolverModal: React.FC<Props> = ({ slot, conflict, doctors, slots
         };
 
         fetchSuggestions();
-    }, [targetSlotForReplacement, assignedDoctor, doctors, slots, unavailabilities, shiftHistory]);
+    }, [targetSlotForReplacement, assignedDoctor, doctors, slots, unavailabilities, effectiveHistory]);
 
     // --- HANDLERS ---
 
@@ -290,7 +290,7 @@ const ConflictResolverModal: React.FC<Props> = ({ slot, conflict, doctors, slots
                                                         const rate = getDoctorWorkRate(doc);
                                                         let historyTotal = 0;
                                                         activityDefinitions.forEach(act => {
-                                                            historyTotal += shiftHistory[doc.id]?.[act.id] || 0;
+                                                            historyTotal += effectiveHistory[doc.id]?.[act.id] || 0;
                                                         });
                                                         const currentShifts = slots.filter(s => s.assignedDoctorId === doc.id).length;
                                                         const weightedScore = (historyTotal + currentShifts) / rate;

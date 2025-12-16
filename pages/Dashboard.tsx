@@ -15,7 +15,7 @@ const Dashboard: React.FC = () => {
         template,
         activityDefinitions,
         rcpTypes,
-        shiftHistory,
+        effectiveHistory, // Use effectiveHistory for equity calculations
         rcpAttendance,
         rcpExceptions,
         manualOverrides,
@@ -66,7 +66,7 @@ const Dashboard: React.FC = () => {
             activityDefinitions,
             rcpTypes,
             false, // Do NOT auto-calculate activities in Dashboard - use overrides only
-            shiftHistory,
+            effectiveHistory,
             rcpAttendance,
             rcpExceptions
         );
@@ -85,7 +85,7 @@ const Dashboard: React.FC = () => {
             }
             return slot;
         });
-    }, [currentWeekStart, template, unavailabilities, doctors, activityDefinitions, rcpTypes, shiftHistory, rcpAttendance, rcpExceptions, manualOverrides]);
+    }, [currentWeekStart, template, unavailabilities, doctors, activityDefinitions, rcpTypes, effectiveHistory, rcpAttendance, rcpExceptions, manualOverrides]);
 
     const conflicts = useMemo(() => {
         return detectConflicts(schedule, unavailabilities, doctors, activityDefinitions);
@@ -308,24 +308,48 @@ const Dashboard: React.FC = () => {
 
                         return (
                             <div key={s.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border" style={{ borderLeftWidth: '4px', borderLeftColor: borderColor }}>
-                                <div className="flex items-center">
+                                <div className="flex items-center flex-1 min-w-0">
                                     {isRcpUnconfirmed ? (
                                         <div className="flex flex-col">
                                             <span className="text-[10px] text-yellow-700 bg-yellow-100 px-1 rounded font-bold mb-1 w-fit">⚠️ À confirmer</span>
-                                            <div className="text-xs text-slate-600">
+                                            <div className="text-[9px] text-slate-400 uppercase font-bold mb-0.5">Référents :</div>
+                                            <div className="text-xs text-slate-500 italic">
                                                 {[s.assignedDoctorId, ...(s.secondaryDoctorIds || [])].map(id => doctors.find(d => d.id === id)?.name).filter(Boolean).join(', ')}
+                                            </div>
+                                        </div>
+                                    ) : s.type === SlotType.RCP ? (
+                                        // RCP confirmée - afficher les participants confirmés
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-green-700 bg-green-100 px-1 rounded font-bold mb-1 w-fit">✓ Confirmée</span>
+                                            <div className="text-[9px] text-green-600 uppercase font-bold mb-0.5">Présent(s) :</div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {[s.assignedDoctorId, ...(s.secondaryDoctorIds || [])].filter(Boolean).map(id => {
+                                                    const d = doctors.find(doc => doc.id === id);
+                                                    if (!d) return null;
+                                                    return (
+                                                        <div key={id} className="flex items-center bg-white px-1.5 py-0.5 rounded border border-green-300">
+                                                            <div
+                                                                className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold mr-1 text-white"
+                                                                style={{ backgroundColor: getDoctorHexColor(d.color) }}
+                                                            >
+                                                                {d.name.substring(0, 2)}
+                                                            </div>
+                                                            <span className="text-xs font-bold text-green-800">{d.name}</span>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     ) : (
                                         <>
                                             <div
-                                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mr-3 text-white"
+                                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mr-3 text-white flex-shrink-0"
                                                 style={{ backgroundColor: doc ? getDoctorHexColor(doc.color) : '#94a3b8' }}
                                             >
                                                 {doc ? doc.name.substring(0, 2) : '?'}
                                             </div>
-                                            <div>
-                                                <div className="text-sm font-bold text-slate-700 flex items-center">
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-bold text-slate-700 flex items-center truncate">
                                                     {doc ? doc.name : 'Non assigné'}
                                                 </div>
                                                 <div className="text-xs text-slate-500">{s.type} {s.subType && `• ${s.subType}`}</div>
@@ -333,7 +357,7 @@ const Dashboard: React.FC = () => {
                                         </>
                                     )}
                                 </div>
-                                <div className="text-xs font-bold bg-white px-2 py-1 rounded border border-slate-200 text-slate-600">
+                                <div className="text-xs font-bold bg-white px-2 py-1 rounded border border-slate-200 text-slate-600 flex-shrink-0 ml-2">
                                     {s.location}
                                 </div>
                             </div>
@@ -435,11 +459,9 @@ const Dashboard: React.FC = () => {
                                     {rcps.length === 0 ? <span className="text-[9px] text-slate-300 italic">Aucune</span> : (
                                         <div className="space-y-1">
                                             {rcps.map(rcp => {
-                                                const rcpDoc = doctors.find(d => d.id === rcp.assignedDoctorId);
-
                                                 if (rcp.isUnconfirmed) {
-                                                    // Show All eligible names
-                                                    const allNames = [rcp.assignedDoctorId, ...(rcp.secondaryDoctorIds || [])]
+                                                    // RCP non confirmée - afficher les référents par défaut (pas comme participants)
+                                                    const referentNames = [rcp.assignedDoctorId, ...(rcp.secondaryDoctorIds || [])]
                                                         .map(id => doctors.find(d => d.id === id)?.name)
                                                         .filter(Boolean);
 
@@ -449,21 +471,39 @@ const Dashboard: React.FC = () => {
                                                                 <span className="text-[8px] text-purple-700 font-bold truncate max-w-[50px]">{rcp.location}</span>
                                                                 <span className="text-[8px] text-yellow-700 font-bold">⚠️ À confirmer</span>
                                                             </div>
+                                                            <div className="text-[6px] text-slate-400 uppercase font-bold mb-0.5">Référents :</div>
                                                             <div className="flex flex-wrap gap-0.5">
-                                                                {allNames.map(name => (
-                                                                    <span key={name} className="text-[7px] bg-white border px-1 rounded text-slate-600">{name}</span>
+                                                                {referentNames.map(name => (
+                                                                    <span key={name} className="text-[7px] bg-white border border-slate-200 px-1 rounded text-slate-500 italic">
+                                                                        {name}
+                                                                    </span>
                                                                 ))}
                                                             </div>
                                                         </div>
                                                     )
                                                 }
 
+                                                // RCP confirmée - afficher UNIQUEMENT les médecins qui ont confirmé "Présent"
+                                                const confirmedIds = [rcp.assignedDoctorId, ...(rcp.secondaryDoctorIds || [])].filter(Boolean);
+                                                const confirmedDocs = confirmedIds
+                                                    .map(id => doctors.find(d => d.id === id))
+                                                    .filter(Boolean);
+
                                                 return (
-                                                    <div key={rcp.id} className="flex justify-between items-center bg-purple-50 p-1 rounded border border-purple-200 border-l-4 border-l-purple-500">
-                                                        <span className="text-[8px] text-purple-700 font-bold truncate max-w-[50px]">{rcp.location}</span>
-                                                        <div className="flex items-center">
-                                                            <span className="text-[8px] text-slate-700 font-medium truncate max-w-[60px]">{rcpDoc?.name || '-'}</span>
-                                                            <span className="ml-1 text-[8px] text-green-600">✓</span>
+                                                    <div key={rcp.id} className="flex flex-col bg-green-50 p-1 rounded border border-green-200 border-l-4 border-l-green-500">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-[8px] text-purple-700 font-bold truncate max-w-[50px]">{rcp.location}</span>
+                                                            <span className="text-[8px] text-green-600 font-bold flex items-center">
+                                                                <span className="mr-0.5">✓</span> Confirmée
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-[6px] text-green-600 uppercase font-bold mb-0.5">Présent(s) :</div>
+                                                        <div className="flex flex-wrap gap-0.5">
+                                                            {confirmedDocs.map((doc) => (
+                                                                <span key={doc?.id} className="text-[7px] bg-white border border-green-300 px-1 rounded text-green-800 font-bold">
+                                                                    {doc?.name}
+                                                                </span>
+                                                            ))}
                                                         </div>
                                                     </div>
                                                 )

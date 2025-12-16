@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { supabase } from '../../services/supabaseClient';
-import { AppRole, Doctor, Specialty } from '../../types';
+import { AppRole, Doctor, Specialty, DayOfWeek, SlotType } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { AppContext } from '../../App';
-import { Users, UserPlus, Edit2, Trash2, X, Save, Key, UserCheck, Mail, Shield, Eye, EyeOff, AlertTriangle, Loader2, RefreshCw, Stethoscope, Link2, Unlink, Tag, Plus } from 'lucide-react';
+import { Users, UserPlus, Edit2, Trash2, X, Save, Key, UserCheck, Mail, Shield, Eye, EyeOff, AlertTriangle, Loader2, RefreshCw, Stethoscope, Link2, Unlink, Tag, Plus, Ban, Calendar } from 'lucide-react';
 
 interface UserData {
     id: string;
@@ -20,6 +20,9 @@ interface DoctorWithUser {
     name: string;
     color: string;
     specialty: string[];
+    excludedDays: DayOfWeek[];
+    excludedActivities: string[];
+    excludedSlotTypes: SlotType[];
     linkedUser?: { id: string; email: string } | null;
 }
 
@@ -28,7 +31,7 @@ const NON_DOCTOR_ROLES = ['Secrétariat', 'Secretariat', 'Secretary'];
 
 const TeamManagement: React.FC = () => {
     const { hasPermission } = useAuth();
-    const { doctors, removeDoctor } = useContext(AppContext);
+    const { doctors, removeDoctor, activityDefinitions } = useContext(AppContext);
     const [users, setUsers] = useState<UserData[]>([]);
     const [roles, setRoles] = useState<AppRole[]>([]);
     const [allDoctors, setAllDoctors] = useState<DoctorWithUser[]>([]);
@@ -57,7 +60,10 @@ const TeamManagement: React.FC = () => {
     const [doctorFormData, setDoctorFormData] = useState({
         name: '',
         color: '#3B82F6',
-        selectedSpecialties: [] as string[] // Array of specialty names
+        selectedSpecialties: [] as string[],
+        excludedDays: [] as DayOfWeek[],
+        excludedActivities: [] as string[],
+        excludedSlotTypes: [] as SlotType[]
     });
 
     // Specialty Management State
@@ -104,10 +110,10 @@ const TeamManagement: React.FC = () => {
 
             if (rolesError) console.error('Error fetching roles:', rolesError);
 
-            // Fetch all doctors with their linked users
+            // Fetch all doctors with their linked users and exclusions
             const { data: doctorsData, error: doctorsError } = await supabase
                 .from('doctors')
-                .select('id, name, color, specialty')
+                .select('id, name, color, specialty, excluded_days, excluded_activities, excluded_slot_types')
                 .order('name');
 
             if (doctorsError) console.error('Error fetching doctors:', doctorsError);
@@ -124,8 +130,13 @@ const TeamManagement: React.FC = () => {
             const doctorsWithUsers: DoctorWithUser[] = (doctorsData || []).map(doc => {
                 const linkedUser = (usersData || []).find(u => u.doctor_id === doc.id);
                 return {
-                    ...doc,
+                    id: doc.id,
+                    name: doc.name,
+                    color: doc.color,
                     specialty: doc.specialty || [],
+                    excludedDays: doc.excluded_days || [],
+                    excludedActivities: doc.excluded_activities || [],
+                    excludedSlotTypes: doc.excluded_slot_types || [],
                     linkedUser: linkedUser ? { id: linkedUser.id, email: linkedUser.email } : null
                 };
             });
@@ -402,7 +413,10 @@ const TeamManagement: React.FC = () => {
         setDoctorFormData({
             name: doctor.name,
             color: doctor.color || '#3B82F6',
-            selectedSpecialties: doctor.specialty || []
+            selectedSpecialties: doctor.specialty || [],
+            excludedDays: doctor.excludedDays || [],
+            excludedActivities: doctor.excludedActivities || [],
+            excludedSlotTypes: doctor.excludedSlotTypes || []
         });
         setError('');
         setSuccess('');
@@ -423,7 +437,10 @@ const TeamManagement: React.FC = () => {
                 .update({
                     name: doctorFormData.name,
                     color: doctorFormData.color,
-                    specialty: doctorFormData.selectedSpecialties
+                    specialty: doctorFormData.selectedSpecialties,
+                    excluded_days: doctorFormData.excludedDays,
+                    excluded_activities: doctorFormData.excludedActivities,
+                    excluded_slot_types: doctorFormData.excludedSlotTypes
                 })
                 .eq('id', editingDoctor.id);
 
@@ -513,6 +530,39 @@ const TeamManagement: React.FC = () => {
                 return { ...prev, selectedSpecialties: current.filter(s => s !== specialtyName) };
             } else {
                 return { ...prev, selectedSpecialties: [...current, specialtyName] };
+            }
+        });
+    };
+
+    const toggleExcludedDay = (day: DayOfWeek) => {
+        setDoctorFormData(prev => {
+            const current = prev.excludedDays;
+            if (current.includes(day)) {
+                return { ...prev, excludedDays: current.filter(d => d !== day) };
+            } else {
+                return { ...prev, excludedDays: [...current, day] };
+            }
+        });
+    };
+
+    const toggleExcludedActivity = (activityId: string) => {
+        setDoctorFormData(prev => {
+            const current = prev.excludedActivities;
+            if (current.includes(activityId)) {
+                return { ...prev, excludedActivities: current.filter(a => a !== activityId) };
+            } else {
+                return { ...prev, excludedActivities: [...current, activityId] };
+            }
+        });
+    };
+
+    const toggleExcludedSlotType = (slotType: SlotType) => {
+        setDoctorFormData(prev => {
+            const current = prev.excludedSlotTypes;
+            if (current.includes(slotType)) {
+                return { ...prev, excludedSlotTypes: current.filter(t => t !== slotType) };
+            } else {
+                return { ...prev, excludedSlotTypes: [...current, slotType] };
             }
         });
     };
@@ -1343,6 +1393,96 @@ const TeamManagement: React.FC = () => {
                                         Sélectionnées: {doctorFormData.selectedSpecialties.join(', ')}
                                     </p>
                                 )}
+                            </div>
+
+                            {/* Separator */}
+                            <div className="border-t border-slate-200 pt-4">
+                                <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                    <Ban className="w-4 h-4 text-red-500" /> Préférences & Exclusions
+                                </h3>
+
+                                {/* Excluded Days */}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-slate-600 mb-2">
+                                        <Calendar className="w-4 h-4 inline mr-1 text-red-500" /> Jours non travaillés
+                                    </label>
+                                    <div className="flex flex-wrap gap-1">
+                                        {Object.values(DayOfWeek).map(day => (
+                                            <button
+                                                key={day}
+                                                type="button"
+                                                onClick={() => toggleExcludedDay(day)}
+                                                className={`px-2 py-1 text-xs rounded-lg border transition-all ${doctorFormData.excludedDays.includes(day)
+                                                    ? 'bg-red-100 text-red-800 border-red-200 font-bold'
+                                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                                    }`}
+                                            >
+                                                {day}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Excluded Activities */}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-slate-600 mb-2">
+                                        <Ban className="w-4 h-4 inline mr-1 text-slate-500" /> Activités Exclues
+                                    </label>
+                                    {activityDefinitions.length === 0 ? (
+                                        <p className="text-xs text-slate-400 italic">Aucune activité définie.</p>
+                                    ) : (
+                                        <div className="space-y-1 max-h-32 overflow-y-auto bg-slate-50 rounded-lg p-2">
+                                            {activityDefinitions.map(act => (
+                                                <div
+                                                    key={act.id}
+                                                    className="flex items-center p-1.5 hover:bg-white rounded cursor-pointer"
+                                                    onClick={() => toggleExcludedActivity(act.id)}
+                                                >
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center mr-2 ${doctorFormData.excludedActivities.includes(act.id)
+                                                        ? 'bg-red-500 border-red-500'
+                                                        : 'border-slate-300 bg-white'
+                                                        }`}>
+                                                        {doctorFormData.excludedActivities.includes(act.id) && (
+                                                            <Ban className="w-2.5 h-2.5 text-white" />
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-sm ${doctorFormData.excludedActivities.includes(act.id)
+                                                        ? 'text-red-700 font-medium line-through'
+                                                        : 'text-slate-700'
+                                                        }`}>
+                                                        {act.name}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Excluded Slot Types */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-2">
+                                        <Ban className="w-4 h-4 inline mr-1 text-orange-500" /> Types de Créneau Exclus
+                                    </label>
+                                    <div className="flex flex-wrap gap-1">
+                                        {Object.values(SlotType)
+                                            .filter(type => type !== SlotType.MACHINE && type !== SlotType.OTHER)
+                                            .map(type => (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => toggleExcludedSlotType(type)}
+                                                    className={`px-2 py-1 text-xs rounded-lg border transition-all ${doctorFormData.excludedSlotTypes.includes(type)
+                                                        ? 'bg-orange-100 text-orange-800 border-orange-200 font-bold'
+                                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                                        }`}
+                                                >
+                                                    {type === SlotType.CONSULTATION ? 'Consultation' :
+                                                        type === SlotType.RCP ? 'RCP' :
+                                                            type === SlotType.ACTIVITY ? 'Activité' : type}
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
                             </div>
 
                             {error && (

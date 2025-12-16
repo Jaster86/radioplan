@@ -89,40 +89,43 @@ const Activities: React.FC = () => {
 
     // COMPLETE History = TOTAL of ALL saved assignments (for displaying cumulative stats)
     // This does NOT change based on which week is displayed!
+    // If activitiesStartDate is set, count from that date. Otherwise, count from far past (full history)
     const completeHistory = useMemo(() => {
-        if (activitiesStartDate) {
-            const farFuture = new Date();
-            farFuture.setFullYear(farFuture.getFullYear() + 5);
-            return computeHistoryFromDate(
-                activitiesStartDate,
-                farFuture, // Count ALL saved overrides ever
-                template,
-                unavailabilities,
-                doctors,
-                activityDefinitions,
-                rcpTypes,
-                manualOverrides
-            );
-        }
-        return shiftHistory;
-    }, [activitiesStartDate, template, unavailabilities, doctors, activityDefinitions, rcpTypes, manualOverrides, shiftHistory]);
+        const farFuture = new Date();
+        farFuture.setFullYear(farFuture.getFullYear() + 5);
+
+        // Use activitiesStartDate if set, otherwise use a date far in the past (2020-01-01)
+        const startDate = activitiesStartDate || '2020-01-01';
+
+        return computeHistoryFromDate(
+            startDate,
+            farFuture, // Count ALL saved overrides
+            template,
+            unavailabilities,
+            doctors,
+            activityDefinitions,
+            rcpTypes,
+            manualOverrides
+        );
+    }, [activitiesStartDate, template, unavailabilities, doctors, activityDefinitions, rcpTypes, manualOverrides]);
 
     // For auto-fill algorithm: history UP TO current week only
+    // If activitiesStartDate is set, count from that date. Otherwise, count from far past.
     const effectiveHistory = useMemo(() => {
-        if (activitiesStartDate) {
-            return computeHistoryFromDate(
-                activitiesStartDate,
-                currentWeekStart,
-                template,
-                unavailabilities,
-                doctors,
-                activityDefinitions,
-                rcpTypes,
-                manualOverrides
-            );
-        }
-        return shiftHistory;
-    }, [activitiesStartDate, currentWeekStart, template, unavailabilities, doctors, activityDefinitions, rcpTypes, manualOverrides, shiftHistory]);
+        // Use activitiesStartDate if set, otherwise use a date far in the past (2020-01-01)
+        const startDate = activitiesStartDate || '2020-01-01';
+
+        return computeHistoryFromDate(
+            startDate,
+            currentWeekStart,
+            template,
+            unavailabilities,
+            doctors,
+            activityDefinitions,
+            rcpTypes,
+            manualOverrides
+        );
+    }, [activitiesStartDate, currentWeekStart, template, unavailabilities, doctors, activityDefinitions, rcpTypes, manualOverrides]);
 
 
     // Check if current week is in the past
