@@ -627,11 +627,19 @@ const Profile: React.FC = () => {
                             {upcomingRcps.map((item: any) => {
                                 const isBackup = item.template.backupDoctorId === currentDoctor.id;
 
+                                // Calculate the actual day name from the display date (not template day)
+                                const displayDateObj = new Date(item.date + 'T00:00:00');
+                                const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                                const actualDayName = dayNames[displayDateObj.getDay()];
+
+                                // For normal RCPs, use template.day; for moved RCPs, use calculated day
+                                const displayDay = item.isMoved ? actualDayName : (item.isManual ? '' : item.template.day);
+
                                 if (item.isCancelled) {
                                     return (
                                         <div key={item.generatedId} className="border rounded-lg p-3 bg-gray-100 border-gray-200 opacity-70 relative">
                                             <div className="text-xs font-bold text-gray-500 uppercase line-through">
-                                                {item.isManual ? 'MANUEL' : item.template.day} {item.date.split('-').slice(1).reverse().join('/')}
+                                                {displayDay} {item.date.split('-').slice(1).reverse().join('/')}
                                             </div>
                                             <div className="font-bold text-gray-600 text-sm mb-2 line-through">{item.template.location}</div>
                                             <div className="absolute top-2 right-2 text-[10px] bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded">ANNULÉ</div>
@@ -640,18 +648,35 @@ const Profile: React.FC = () => {
                                 }
 
                                 return (
-                                    <div key={item.generatedId} className={`border rounded-lg p-3 transition-all relative ${item.myStatus === 'PRESENT' ? 'bg-green-50 border-green-200' : item.myStatus === 'ABSENT' ? 'bg-red-50 border-red-200 opacity-80' : 'bg-white border-slate-200 shadow-sm'}`}>
+                                    <div key={item.generatedId} className={`border rounded-lg p-3 transition-all relative ${item.isMoved ? 'ring-2 ring-orange-300' : ''} ${item.myStatus === 'PRESENT' ? 'bg-green-50 border-green-200' : item.myStatus === 'ABSENT' ? 'bg-red-50 border-red-200 opacity-80' : 'bg-white border-slate-200 shadow-sm'}`}>
                                         {/* Notification pastille - shows for current and next week when no choice made */}
                                         {!item.myStatus && (notifWeekOffset === 0 || notifWeekOffset === 1) && (
                                             <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse flex items-center justify-center shadow-lg" title={notifWeekOffset === 0 ? "Confirmation requise cette semaine" : "Confirmation requise pour semaine prochaine"}>
                                                 <span className="text-[8px] text-white font-bold">!</span>
                                             </div>
                                         )}
+
+                                        {/* Badge for exceptionally moved RCP */}
+                                        {item.isMoved && (
+                                            <div className="absolute top-2 right-2 text-[9px] bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 animate-pulse">
+                                                <span>⚡</span> DÉPLACÉ
+                                            </div>
+                                        )}
+
                                         <div className="flex justify-between items-start mb-2">
                                             <div className="text-xs font-bold text-slate-500 uppercase">
-                                                {item.isManual ? '' : item.template.day} {item.date.split('-').slice(1).reverse().join('/')}
+                                                {displayDay} {item.date.split('-').slice(1).reverse().join('/')}
+                                                {/* Show original date if moved */}
+                                                {item.isMoved && item.originalDate && (
+                                                    <div className="text-[9px] text-orange-600 font-normal normal-case mt-0.5">
+                                                        (initialement le {item.originalDate.split('-').slice(1).reverse().join('/')})
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center text-[10px] text-slate-400 mt-0.5">
                                                     <Clock className="w-3 h-3 mr-1" /> {item.time}
+                                                    {item.isTimeChanged && (
+                                                        <span className="ml-1 text-orange-600 font-medium">(modifié)</span>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1">
